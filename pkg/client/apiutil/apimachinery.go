@@ -4,10 +4,12 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 )
@@ -59,6 +61,33 @@ func RESTClientForGVK(gvk schema.GroupVersionKind, baseConfig *rest.Config, code
 		cfg.APIPath = "/apis"
 	}
 	cfg.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: codecs}
+	if cfg.UserAgent == "" {
+		cfg.UserAgent = rest.DefaultKubernetesUserAgent()
+	}
+	return rest.RESTClientFor(cfg)
+}
+
+// RESTUnstructuredClientForGVK constructs a new rest.Interface for accessing unstructured resources.
+func RESTUnstructuredClientForGVK(gvk schema.GroupVersionKind, baseConfig *rest.Config) (rest.Interface, error) {
+	gv := gvk.GroupVersion()
+
+	cfg := rest.CopyConfig(baseConfig)
+	cfg.GroupVersion = &gv
+	if gvk.Group == "" {
+		cfg.APIPath = "/api"
+	} else {
+		cfg.APIPath = "/apis"
+	}
+	var jsonInfo runtime.SerializerInfo
+	for _, info := range scheme.Codecs.SupportedMediaTypes() {
+		if info.MediaType == runtime.ContentTypeJSON {
+			jsonInfo = info
+			break
+		}
+	}
+	jsonInfo.Serializer = unstructured.UnstructuredJSONScheme
+
+	cfg.NegotiatedSerializer = serializer.NegotiatedSerializerWrapper(jsonInfo)
 	if cfg.UserAgent == "" {
 		cfg.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
