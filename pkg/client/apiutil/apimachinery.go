@@ -67,33 +67,14 @@ func GVKForObject(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersi
 // RESTClientForGVK constructs a new rest.Interface capable of accessing the resource associated
 // with the given GroupVersionKind.
 func RESTClientForGVK(gvk schema.GroupVersionKind, baseConfig *rest.Config, codecs serializer.CodecFactory) (rest.Interface, error) {
-	gv := gvk.GroupVersion()
-
-	cfg := rest.CopyConfig(baseConfig)
-	cfg.GroupVersion = &gv
-	if gvk.Group == "" {
-		cfg.APIPath = "/api"
-	} else {
-		cfg.APIPath = "/apis"
-	}
+	cfg := createRestConfig(gvk, baseConfig)
 	cfg.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: codecs}
-	if cfg.UserAgent == "" {
-		cfg.UserAgent = rest.DefaultKubernetesUserAgent()
-	}
 	return rest.RESTClientFor(cfg)
 }
 
 // RESTUnstructuredClientForGVK constructs a new rest.Interface for accessing unstructured resources.
 func RESTUnstructuredClientForGVK(gvk schema.GroupVersionKind, baseConfig *rest.Config) (rest.Interface, error) {
-	gv := gvk.GroupVersion()
-
-	cfg := rest.CopyConfig(baseConfig)
-	cfg.GroupVersion = &gv
-	if gvk.Group == "" {
-		cfg.APIPath = "/api"
-	} else {
-		cfg.APIPath = "/apis"
-	}
+	cfg := createRestConfig(gvk, baseConfig)
 	var jsonInfo runtime.SerializerInfo
 	for _, info := range scheme.Codecs.SupportedMediaTypes() {
 		if info.MediaType == runtime.ContentTypeJSON {
@@ -102,10 +83,25 @@ func RESTUnstructuredClientForGVK(gvk schema.GroupVersionKind, baseConfig *rest.
 		}
 	}
 	jsonInfo.Serializer = unstructured.UnstructuredJSONScheme
-
 	cfg.NegotiatedSerializer = serializer.NegotiatedSerializerWrapper(jsonInfo)
+
+	return rest.RESTClientFor(cfg)
+}
+
+//createRestConfig copies the base config and updates needed fields for a new rest config
+func createRestConfig(gvk schema.GroupVersionKind, baseConfig *rest.Config) *rest.Config {
+	gv := gvk.GroupVersion()
+
+	cfg := rest.CopyConfig(baseConfig)
+	cfg.GroupVersion = &gv
+	if gvk.Group == "" {
+		cfg.APIPath = "/api"
+	} else {
+		cfg.APIPath = "/apis"
+	}
 	if cfg.UserAgent == "" {
 		cfg.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
-	return rest.RESTClientFor(cfg)
+	return cfg
+
 }
