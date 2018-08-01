@@ -47,10 +47,10 @@ type clientCache struct {
 
 	// resourceByType caches type metadata
 	resourceByType map[reflect.Type]*resourceMeta
-	// resourceByGVK caches type metadat for unstructured
-	resourceByGVK map[schema.GroupVersionKind]*resourceMeta
-	muByType      sync.RWMutex
-	muByGVK       sync.RWMutex
+	// resourceByGVK caches type metadata for unstructured
+	unstructuredResourceByGVK map[schema.GroupVersionKind]*resourceMeta
+	muByType                  sync.RWMutex
+	muByGVK                   sync.RWMutex
 }
 
 // newResource maps obj to a Kubernetes Resource and constructs a client for that Resource.
@@ -77,11 +77,11 @@ func (c *clientCache) newResource(obj runtime.Object) (*resourceMeta, error) {
 	return &resourceMeta{Interface: client, mapping: mapping, gvk: gvk}, nil
 }
 
-func (c *clientCache) handleResourceByGVK(obj runtime.Object) (*resourceMeta, error) {
+func (c *clientCache) getUnstructuredResourceByGVK(obj runtime.Object) (*resourceMeta, error) {
 	// It's better to do creation work twice than to not let multiple
 	// people make requests at once
 	c.muByGVK.RLock()
-	r, known := c.resourceByGVK[obj.GetObjectKind().GroupVersionKind()]
+	r, known := c.unstructuredResourceByGVK[obj.GetObjectKind().GroupVersionKind()]
 	c.muByGVK.RUnlock()
 
 	if known {
@@ -95,11 +95,11 @@ func (c *clientCache) handleResourceByGVK(obj runtime.Object) (*resourceMeta, er
 	if err != nil {
 		return nil, err
 	}
-	c.resourceByGVK[obj.GetObjectKind().GroupVersionKind()] = r
+	c.unstructuredResourceByGVK[obj.GetObjectKind().GroupVersionKind()] = r
 	return r, err
 }
 
-func (c *clientCache) handleResourceByType(obj runtime.Object) (*resourceMeta, error) {
+func (c *clientCache) getResourceByType(obj runtime.Object) (*resourceMeta, error) {
 	typ := reflect.TypeOf(obj)
 
 	// It's better to do creation work twice than to not let multiple
@@ -128,9 +128,9 @@ func (c *clientCache) handleResourceByType(obj runtime.Object) (*resourceMeta, e
 func (c *clientCache) getResource(obj runtime.Object) (*resourceMeta, error) {
 	_, isUnstructured := obj.(*unstructured.Unstructured)
 	if isUnstructured {
-		return c.handleResourceByGVK(obj)
+		return c.getUnstructuredResourceByGVK(obj)
 	}
-	return c.handleResourceByType(obj)
+	return c.getResourceByType(obj)
 }
 
 // getObjMeta returns objMeta containing both type and object metadata and state

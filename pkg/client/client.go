@@ -61,12 +61,12 @@ func New(config *rest.Config, options Options) (Client, error) {
 
 	c := &client{
 		cache: clientCache{
-			config:         config,
-			scheme:         options.Scheme,
-			mapper:         options.Mapper,
-			codecs:         serializer.NewCodecFactory(options.Scheme),
-			resourceByType: make(map[reflect.Type]*resourceMeta),
-			resourceByGVK:  make(map[schema.GroupVersionKind]*resourceMeta),
+			config:                    config,
+			scheme:                    options.Scheme,
+			mapper:                    options.Mapper,
+			codecs:                    serializer.NewCodecFactory(options.Scheme),
+			resourceByType:            make(map[reflect.Type]*resourceMeta),
+			unstructuredResourceByGVK: make(map[schema.GroupVersionKind]*resourceMeta),
 		},
 		paramCodec: runtime.NewParameterCodec(options.Scheme),
 	}
