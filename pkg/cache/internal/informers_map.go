@@ -194,20 +194,6 @@ func (ip *InformersMap) Get(gvk schema.GroupVersionKind, obj runtime.Object) (*M
 
 // newListWatch returns a new ListWatch object that can be used to create a SharedIndexInformer.
 func (ip *InformersMap) newListWatch(gvk schema.GroupVersionKind, isUnstructured bool) (*cache.ListWatch, error) {
-	// Construct a RESTClient for the groupVersionKind that we will use to
-	// talk to the apiserver.
-	var client rest.Interface
-	var err error
-	if isUnstructured {
-		client, err = apiutil.RESTUnstructuredClientForGVK(gvk, ip.config)
-	} else {
-		client, err = apiutil.RESTClientForGVK(gvk, ip.config, ip.codecs)
-
-	}
-	if err != nil {
-		return nil, err
-	}
-
 	// Kubernetes APIs work against Resources, not GroupVersionKinds.  Map the
 	// groupVersionKind to the Resource API we will use.
 	mapping, err := ip.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -215,11 +201,26 @@ func (ip *InformersMap) newListWatch(gvk schema.GroupVersionKind, isUnstructured
 		return nil, err
 	}
 
-	// Get a listObject for listing that the ListWatch can DeepCopy
-	listGVK := gvk.GroupVersion().WithKind(gvk.Kind + "List")
-	listObj, err := ip.Scheme.New(listGVK)
-	if err != nil {
-		return nil, err
+	// Construct a RESTClient for the groupVersionKind that we will use to
+	// talk to the apiserver.
+	var client rest.Interface
+	var listObj runtime.Object
+	if isUnstructured {
+		listObj = &unstructured.UnstructuredList{}
+		client, err = apiutil.RESTUnstructuredClientForGVK(gvk, ip.config)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		client, err = apiutil.RESTClientForGVK(gvk, ip.config, ip.codecs)
+		if err != nil {
+			return nil, err
+		}
+		listGVK := gvk.GroupVersion().WithKind(gvk.Kind + "List")
+		listObj, err = ip.Scheme.New(listGVK)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create a new ListWatch for the obj
