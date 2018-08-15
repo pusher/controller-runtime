@@ -148,14 +148,13 @@ func (c *client) List(ctx context.Context, opts *ListOptions, obj runtime.Object
 	if opts != nil {
 		namespace = opts.Namespace
 	}
-	err = r.Get().
+	return r.Get().
 		NamespaceIfScoped(namespace, r.isNamespaced()).
 		Resource(r.resource()).
 		Body(obj).
 		VersionedParams(opts.AsListOptions(), c.paramCodec).
 		Do().
 		Into(obj)
-	return err
 }
 
 // Status implements client.StatusClient
