@@ -67,8 +67,9 @@ func (c *clientCache) newResource(obj runtime.Object) (*resourceMeta, error) {
 	}
 
 	_, isUnstructured := obj.(*unstructured.Unstructured)
+	_, isUnstructuredList := obj.(*unstructured.UnstructuredList)
 	var client rest.Interface
-	if isUnstructured {
+	if isUnstructured || isUnstructuredList {
 		client, err = apiutil.RESTUnstructuredClientForGVK(gvk, c.config)
 	} else {
 		client, err = apiutil.RESTClientForGVK(gvk, c.config, c.codecs)
