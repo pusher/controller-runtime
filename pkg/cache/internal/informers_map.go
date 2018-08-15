@@ -36,7 +36,10 @@ import (
 
 // clientCreatorFunc knows how to create a client and the corresponding list object that it should
 // deserialize into for any given group-version-kind.
-type clientCreatorFunc func(gvk schema.GroupVersionKind, codecs serializer.CodecFactory, scheme *runtime.Scheme, baseConfig *rest.Config) (client rest.Interface, listObj runtime.Object, err error)
+type clientCreatorFunc func(gvk schema.GroupVersionKind,
+	codecs serializer.CodecFactory,
+	scheme *runtime.Scheme,
+	baseConfig *rest.Config) (client rest.Interface, listObj runtime.Object, err error)
 
 // newSpecificInformersMap returns a new specificInformersMap (like
 // the generical InformersMap, except that it doesn't implement WaitForCacheSync).
@@ -237,7 +240,11 @@ func (ip *specificInformersMap) newListWatch(gvk schema.GroupVersionKind) (*cach
 
 // createUnstructuredClient is a ClientCreatorFunc for use with structured
 // objects (i.e. not Unstructured/UnstructuredList).
-func createStructuredClient(gvk schema.GroupVersionKind, codecs serializer.CodecFactory, scheme *runtime.Scheme, baseConfig *rest.Config) (rest.Interface, runtime.Object, error) {
+func createStructuredClient(gvk schema.GroupVersionKind,
+	codecs serializer.CodecFactory,
+	scheme *runtime.Scheme,
+	baseConfig *rest.Config) (rest.Interface, runtime.Object, error) {
+
 	client, err := apiutil.RESTClientForGVK(gvk, baseConfig, codecs)
 	if err != nil {
 		return nil, nil, err
@@ -252,7 +259,11 @@ func createStructuredClient(gvk schema.GroupVersionKind, codecs serializer.Codec
 }
 
 // createUnstructuredClient is a ClientCreatorFunc for use with Unstructured and UnstructuredList.
-func createUnstructuredClient(gvk schema.GroupVersionKind, _ serializer.CodecFactory, _ *runtime.Scheme, baseConfig *rest.Config) (rest.Interface, runtime.Object, error) {
+func createUnstructuredClient(gvk schema.GroupVersionKind,
+	_ serializer.CodecFactory,
+	_ *runtime.Scheme,
+	baseConfig *rest.Config) (rest.Interface, runtime.Object, error) {
+
 	listObj := &unstructured.UnstructuredList{}
 	client, err := apiutil.RESTUnstructuredClientForGVK(gvk, baseConfig)
 	if err != nil {
