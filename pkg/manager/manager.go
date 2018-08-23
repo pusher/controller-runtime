@@ -24,11 +24,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	internalrecorder "sigs.k8s.io/controller-runtime/pkg/internal/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 )
 
@@ -82,10 +84,23 @@ type Options struct {
 	// value only if you know what you are doing. Defaults to 10 hours if unset.
 	SyncPeriod *time.Duration
 
+	// LeaderElection determines whether or not to use leader election when
+	// starting the manager.
+	LeaderElection bool
+
+	// LeaderElectionNamespace determines the namespace in which the leader
+	// election configmap will be created.
+	LeaderElectionNamespace string
+
+	// LeaderElectionID determines the name of the configmap that leader election
+	// will use for holding the leader lock.
+	LeaderElectionID string
+
 	// Dependency injection for testing
 	newCache            func(config *rest.Config, opts cache.Options) (cache.Cache, error)
 	newClient           func(config *rest.Config, options client.Options) (client.Client, error)
 	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme) (recorder.Provider, error)
+	newResourceLock     func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
 }
 
 // Runnable allows a component to be started.
@@ -137,6 +152,16 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
+	// Create the resource lock to enable leader election)
+	resourceLock, err := options.newResourceLock(config, recorderProvider, leaderelection.Options{
+		LeaderElection:          options.LeaderElection,
+		LeaderElectionID:        options.LeaderElectionID,
+		LeaderElectionNamespace: options.LeaderElectionNamespace,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return &controllerManager{
 		config:       config,
 		scheme:       options.Scheme,
@@ -152,6 +177,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 			StatusClient: writeObj,
 		},
 		recorderProvider: recorderProvider,
+		resourceLock:     resourceLock,
 	}, nil
 }
 
@@ -179,6 +205,11 @@ func setOptionsDefaults(options Options) Options {
 	// Allow newRecorderProvider to be mocked
 	if options.newRecorderProvider == nil {
 		options.newRecorderProvider = internalrecorder.NewProvider
+	}
+
+	// Allow newResourceLock to be mocked
+	if options.newResourceLock == nil {
+		options.newResourceLock = leaderelection.NewResourceLock
 	}
 
 	return options
