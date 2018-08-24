@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pborman/uuid"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
