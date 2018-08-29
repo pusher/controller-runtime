@@ -37,18 +37,31 @@ import (
 
 var _ = Describe("manger.Manager", func() {
 	var stop chan struct{}
+	var opts Options
+	var listener net.Listener
 
 	BeforeEach(func() {
 		stop = make(chan struct{})
+		listener = nil
+		opts = Options{
+			newMetricsListener: func(addr string) (net.Listener, error) {
+				var err error
+				listener, err = metrics.NewListener(addr)
+				return listener, err
+			},
+		}
 	})
 
 	AfterEach(func() {
 		close(stop)
+		if listener != nil {
+			Expect(listener.Close()).ToNot(HaveOccurred())
+		}
 	})
 
 	Describe("New", func() {
 		It("should return an error if there is no Config", func() {
-			m, err := New(nil, Options{})
+			m, err := New(nil, opts)
 			Expect(m).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("must specify Config"))
 
@@ -56,19 +69,18 @@ var _ = Describe("manger.Manager", func() {
 
 		It("should return an error if it can't create a RestMapper", func() {
 			expected := fmt.Errorf("expected error: RestMapper")
-			m, err := New(cfg, Options{
-				MapperProvider: func(c *rest.Config) (meta.RESTMapper, error) { return nil, expected },
-			})
+			opts.MapperProvider = func(c *rest.Config) (meta.RESTMapper, error) { return nil, expected }
+			m, err := New(cfg, opts)
 			Expect(m).To(BeNil())
 			Expect(err).To(Equal(expected))
 
 		})
 
 		It("should return an error it can't create a client.Client", func(done Done) {
-			m, err := New(cfg, Options{
-				newClient: func(config *rest.Config, options client.Options) (client.Client, error) {
-					return nil, fmt.Errorf("expected error")
-				}})
+			opts.newClient = func(config *rest.Config, options client.Options) (client.Client, error) {
+				return nil, fmt.Errorf("expected error")
+			}
+			m, err := New(cfg, opts)
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -77,10 +89,10 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		It("should return an error it can't create a cache.Cache", func(done Done) {
-			m, err := New(cfg, Options{
-				newCache: func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
-					return nil, fmt.Errorf("expected error")
-				}})
+			opts.newCache = func(config *rest.Config, opts cache.Options) (cache.Cache, error) {
+				return nil, fmt.Errorf("expected error")
+			}
+			m, err := New(cfg, opts)
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -88,10 +100,10 @@ var _ = Describe("manger.Manager", func() {
 			close(done)
 		})
 		It("should return an error it can't create a recorder.Provider", func(done Done) {
-			m, err := New(cfg, Options{
-				newRecorderProvider: func(config *rest.Config, scheme *runtime.Scheme) (recorder.Provider, error) {
-					return nil, fmt.Errorf("expected error")
-				}})
+			opts.newRecorderProvider = func(config *rest.Config, scheme *runtime.Scheme) (recorder.Provider, error) {
+				return nil, fmt.Errorf("expected error")
+			}
+			m, err := New(cfg, opts)
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("expected error"))
@@ -115,27 +127,19 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		It("should create a listener for the metrics if a valid address is provided", func() {
-			var ln net.Listener
 			m, err := New(cfg, Options{
 				MetricsBindAddress: ":0",
-				newMetricsListener: func(addr string) (net.Listener, error) {
-					var err error
-					ln, err = metrics.NewListener(addr)
-					return ln, err
-				},
 			})
 			Expect(m).ToNot(BeNil())
 			Expect(err).ToNot(HaveOccurred())
-
-			Expect(ln.Close()).ToNot(HaveOccurred())
 		})
 
 		It("should return an error if the metrics bind address is already in use", func() {
 			ln, err := metrics.NewListener(":0")
 			Expect(err).ShouldNot(HaveOccurred())
-			m, err := New(cfg, Options{
-				MetricsBindAddress: ln.Addr().String(),
-			})
+
+			opts.MetricsBindAddress = ln.Addr().String()
+			m, err := New(cfg, opts)
 			Expect(m).To(BeNil())
 			Expect(err).To(HaveOccurred())
 
@@ -145,7 +149,7 @@ var _ = Describe("manger.Manager", func() {
 
 	Describe("Start", func() {
 		It("should Start each Component", func(done Done) {
-			m, err := New(cfg, Options{})
+			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			c1 := make(chan struct{})
 			m.Add(RunnableFunc(func(s <-chan struct{}) error {
@@ -172,7 +176,7 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		It("should stop when stop is called", func(done Done) {
-			m, err := New(cfg, Options{})
+			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			s := make(chan struct{})
 			close(s)
@@ -182,7 +186,7 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		It("should return an error if it can't start the cache", func(done Done) {
-			m, err := New(cfg, Options{})
+			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			mgr, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -195,7 +199,7 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		It("should return an error if any Components fail to Start", func(done Done) {
-			m, err := New(cfg, Options{})
+			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			c1 := make(chan struct{})
 			m.Add(RunnableFunc(func(s <-chan struct{}) error {
@@ -325,7 +329,7 @@ var _ = Describe("manger.Manager", func() {
 	Describe("Add", func() {
 		It("should immediately start the Component if the Manager has already Started another Component",
 			func(done Done) {
-				m, err := New(cfg, Options{})
+				m, err := New(cfg, opts)
 				Expect(err).NotTo(HaveOccurred())
 				mgr, ok := m.(*controllerManager)
 				Expect(ok).To(BeTrue())
@@ -360,7 +364,7 @@ var _ = Describe("manger.Manager", func() {
 			})
 
 		It("should immediately start the Component if the Manager has already Started", func(done Done) {
-			m, err := New(cfg, Options{})
+			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			mgr, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -385,14 +389,14 @@ var _ = Describe("manger.Manager", func() {
 		})
 
 		It("should fail if SetFields fails", func() {
-			m, err := New(cfg, Options{})
+			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(m.Add(&failRec{})).To(HaveOccurred())
 		})
 	})
 	Describe("SetFields", func() {
 		It("should inject field values", func(done Done) {
-			m, err := New(cfg, Options{})
+			m, err := New(cfg, opts)
 			Expect(err).NotTo(HaveOccurred())
 			mgr, ok := m.(*controllerManager)
 			Expect(ok).To(BeTrue())
@@ -483,7 +487,7 @@ var _ = Describe("manger.Manager", func() {
 	})
 
 	It("should provide a function to get the Config", func() {
-		m, err := New(cfg, Options{})
+		m, err := New(cfg, opts)
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
@@ -491,7 +495,7 @@ var _ = Describe("manger.Manager", func() {
 	})
 
 	It("should provide a function to get the Client", func() {
-		m, err := New(cfg, Options{})
+		m, err := New(cfg, opts)
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
@@ -499,7 +503,7 @@ var _ = Describe("manger.Manager", func() {
 	})
 
 	It("should provide a function to get the Scheme", func() {
-		m, err := New(cfg, Options{})
+		m, err := New(cfg, opts)
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
@@ -507,7 +511,7 @@ var _ = Describe("manger.Manager", func() {
 	})
 
 	It("should provide a function to get the FieldIndexer", func() {
-		m, err := New(cfg, Options{})
+		m, err := New(cfg, opts)
 		Expect(err).NotTo(HaveOccurred())
 		mgr, ok := m.(*controllerManager)
 		Expect(ok).To(BeTrue())
@@ -515,7 +519,7 @@ var _ = Describe("manger.Manager", func() {
 	})
 
 	It("should provide a function to get the EventRecorder", func() {
-		m, err := New(cfg, Options{})
+		m, err := New(cfg, opts)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.GetRecorder("test")).NotTo(BeNil())
 	})

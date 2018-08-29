@@ -24,9 +24,10 @@ import (
 // NewListener creates a new TCP listener bound to the given address.
 func NewListener(addr string) (net.Listener, error) {
 	if addr == "" {
-		// If the metrics bind address is empty, don't create a listener
-		return nil, nil
+		// If the metrics bind address is empty, default to ":8080"
+		addr = ":8080"
 	}
+
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("error listening on %s: %v", addr, err)
