@@ -18,6 +18,7 @@ package manager
 
 import (
 	"fmt"
+	"net"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -28,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	fakeleaderelection "sigs.k8s.io/controller-runtime/pkg/leaderelection/fake"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
@@ -110,6 +112,34 @@ var _ = Describe("manger.Manager", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("if leader election is enabled, both LeaderElectionID and LeaderElectionNamespace must be set"))
 			})
+		})
+
+		It("should create a listener for the metrics if a valid address is provided", func() {
+			var ln net.Listener
+			m, err := New(cfg, Options{
+				MetricsBindAddress: ":0",
+				newMetricsListener: func(addr string) (net.Listener, error) {
+					var err error
+					ln, err = metrics.NewListener(addr)
+					return ln, err
+				},
+			})
+			Expect(m).ToNot(BeNil())
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(ln.Close()).ToNot(HaveOccurred())
+		})
+
+		It("should return an error if the metrics bind address is already in use", func() {
+			ln, err := metrics.NewListener(":0")
+			Expect(err).ShouldNot(HaveOccurred())
+			m, err := New(cfg, Options{
+				MetricsBindAddress: ln.Addr().String(),
+			})
+			Expect(m).To(BeNil())
+			Expect(err).To(HaveOccurred())
+
+			Expect(ln.Close()).ToNot(HaveOccurred())
 		})
 	})
 

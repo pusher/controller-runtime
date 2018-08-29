@@ -18,6 +18,7 @@ package manager
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -62,6 +63,9 @@ type controllerManager struct {
 
 	// resourceLock
 	resourceLock resourcelock.Interface
+
+	// metricsListener for prometheus metrics serving
+	metricsListener net.Listener
 
 	mu      sync.Mutex
 	started bool
