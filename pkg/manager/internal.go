@@ -18,6 +18,7 @@ package manager
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -62,6 +63,9 @@ type controllerManager struct {
 
 	// resourceLock
 	resourceLock resourcelock.Interface
+
+	// metricsListener is used to serve prometheus metrics
+	metricsListener net.Listener
 
 	mu      sync.Mutex
 	started bool
