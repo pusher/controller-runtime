@@ -17,11 +17,14 @@ limitations under the License.
 package manager
 
 import (
+	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
@@ -143,6 +146,26 @@ func (cm *controllerManager) GetRecorder(name string) record.EventRecorder {
 	return cm.recorderProvider.GetEventRecorderFor(name)
 }
 
+func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	server := http.Server{
+		Handler: mux,
+	}
+	// Run the server
+	go func() {
+		if err := server.Serve(cm.metricsListener); err != nil {
+			cm.errChan <- err
+		}
+	}()
+
+	// Shutdown the server when stop is closed
+	select {
+	case <-stop:
+		server.Shutdown(context.TODO())
+	}
+}
+
 func (cm *controllerManager) Start(stop <-chan struct{}) error {
 	if cm.resourceLock == nil {
 		go cm.start(stop)
@@ -202,6 +225,9 @@ func (cm *controllerManager) start(stop <-chan struct{}) {
 				cm.errChan <- err
 			}
 		}()
+
+		// Start the metrics server
+		go cm.serveMetrics(stop)
 
 		// Wait for the caches to sync.
 		// TODO(community): Check the return value and write a test

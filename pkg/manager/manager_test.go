@@ -19,6 +19,7 @@ package manager
 import (
 	"fmt"
 	"net"
+	"net/http"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -55,7 +56,8 @@ var _ = Describe("manger.Manager", func() {
 	AfterEach(func() {
 		close(stop)
 		if listener != nil {
-			Expect(listener.Close()).ToNot(HaveOccurred())
+			// This may already be closed if Start has been called
+			listener.Close()
 		}
 	})
 
@@ -322,6 +324,72 @@ var _ = Describe("manger.Manager", func() {
 				<-c1
 				<-c2
 				<-c3
+			})
+
+			Context("should start serving metrics", func() {
+				It("should stop serving metrics when stop is called", func(done Done) {
+					opts.MetricsBindAddress = "127.0.0.1:0"
+					m, err := New(cfg, opts)
+					Expect(err).NotTo(HaveOccurred())
+
+					s := make(chan struct{})
+					go func() {
+						defer GinkgoRecover()
+						Expect(m.Start(s)).NotTo(HaveOccurred())
+						close(done)
+					}()
+
+					// Check the metrics started
+					endpoint := fmt.Sprintf("http://%s", listener.Addr().String())
+					_, err = http.Get(endpoint)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Shutdown the server
+					close(s)
+
+					// Expect the metrics server to shutdown
+					Eventually(func() error {
+						_, err = http.Get(endpoint)
+						return err
+					}).ShouldNot(Succeed())
+				})
+
+				It("should serve metrics endpoint", func(done Done) {
+					opts.MetricsBindAddress = "127.0.0.1:0"
+					m, err := New(cfg, opts)
+					Expect(err).NotTo(HaveOccurred())
+
+					s := make(chan struct{})
+					defer close(s)
+					go func() {
+						defer GinkgoRecover()
+						Expect(m.Start(s)).NotTo(HaveOccurred())
+						close(done)
+					}()
+
+					metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
+					resp, err := http.Get(metricsEndpoint)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(resp.StatusCode).To(Equal(200))
+				})
+
+				It("should not serve anything other than metrics endpoint", func(done Done) {
+					opts.MetricsBindAddress = "127.0.0.1:0"
+					m, err := New(cfg, opts)
+					Expect(err).NotTo(HaveOccurred())
+
+					s := make(chan struct{})
+					defer close(s)
+					go func() {
+						defer GinkgoRecover()
+						Expect(m.Start(s)).NotTo(HaveOccurred())
+						close(done)
+					}()
+
+					endpoint := fmt.Sprintf("http://%s/should-not-exist", listener.Addr().String())
+					resp, err := http.Get(endpoint)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(resp.StatusCode).To(Equal(404))
 			})
 		})
 	})
