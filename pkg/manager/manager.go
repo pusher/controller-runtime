@@ -21,6 +21,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -69,6 +70,9 @@ type Manager interface {
 
 	// GetRecorder returns a new EventRecorder for the provided name
 	GetRecorder(name string) record.EventRecorder
+
+	// GetRegistry returns the controllers prometheus metrics registry
+	GetRegistry() prometheus.Registerer
 }
 
 // Options are the arguments for creating a new Manager
@@ -108,6 +112,7 @@ type Options struct {
 	newRecorderProvider func(config *rest.Config, scheme *runtime.Scheme) (recorder.Provider, error)
 	newResourceLock     func(config *rest.Config, recorderProvider recorder.Provider, options leaderelection.Options) (resourcelock.Interface, error)
 	newMetricsListener  func(addr string) (net.Listener, error)
+	newMetricsRegistry  func() prometheus.Registerer
 }
 
 // Runnable allows a component to be started.
@@ -193,6 +198,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		recorderProvider: recorderProvider,
 		resourceLock:     resourceLock,
 		metricsListener:  metricsListener,
+		metricsRegistry:  options.newMetricsRegistry(),
 	}, nil
 }
 
@@ -229,6 +235,11 @@ func setOptionsDefaults(options Options) Options {
 
 	if options.newMetricsListener == nil {
 		options.newMetricsListener = metrics.NewListener
+	}
+
+	// Allow newMetricsRegistry to be mocked
+	if options.newMetricsRegistry == nil {
+		options.newMetricsRegistry = metrics.NewRegistry
 	}
 
 	return options

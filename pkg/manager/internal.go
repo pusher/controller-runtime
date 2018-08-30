@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -69,6 +70,10 @@ type controllerManager struct {
 
 	// metricsListener for prometheus metrics serving
 	metricsListener net.Listener
+
+	// metricsRegistry is the registry for collecting all prometheus metrics within
+	// the controller
+	metricsRegistry prometheus.Registerer
 
 	mu      sync.Mutex
 	started bool
@@ -146,9 +151,23 @@ func (cm *controllerManager) GetRecorder(name string) record.EventRecorder {
 	return cm.recorderProvider.GetEventRecorderFor(name)
 }
 
+func (cm *controllerManager) GetRegistry() prometheus.Registerer {
+	return cm.metricsRegistry
+}
+
 func (cm *controllerManager) serveMetrics(stop <-chan struct{}) {
+	var gatherer prometheus.Gatherer
+	var ok bool
+	if gatherer, ok = cm.metricsRegistry.(prometheus.Gatherer); !ok {
+		cm.errChan <- fmt.Errorf("prometheus registry does not implement gatherer interface")
+		return
+	}
+
+	handler := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{
+		ErrorHandling: promhttp.HTTPErrorOnError,
+	})
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", handler)
 	server := http.Server{
 		Handler: mux,
 	}

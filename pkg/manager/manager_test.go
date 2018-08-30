@@ -18,11 +18,13 @@ package manager
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -391,6 +393,43 @@ var _ = Describe("manger.Manager", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(resp.StatusCode).To(Equal(404))
 			})
+
+			It("should serve metrics in its registry", func(done Done) {
+				registry := metrics.NewRegistry()
+				one := prometheus.NewCounter(prometheus.CounterOpts{
+					Name: "test_one",
+					Help: "test metric for testing",
+				})
+				one.Set(1)
+				err := registry.Register(one)
+				Expect(err).NotTo(HaveOccurred())
+
+				opts.MetricsBindAddress = "127.0.0.1:0"
+				opts.newMetricsRegistry = func() prometheus.Registerer { return registry }
+				m, err := New(cfg, opts)
+				Expect(err).NotTo(HaveOccurred())
+
+				s := make(chan struct{})
+				defer close(s)
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				metricsEndpoint := fmt.Sprintf("http://%s/metrics", listener.Addr().String())
+				resp, err := http.Get(metricsEndpoint)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(200))
+
+				data, err := ioutil.ReadAll(resp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(data)).To(ContainSubstring("%s\n%s\n%s\n",
+					`# HELP test_one test metric for testing`,
+					`# TYPE test_one counter`,
+					`test_one 1`,
+				))
+			})
 		})
 	})
 
@@ -590,6 +629,12 @@ var _ = Describe("manger.Manager", func() {
 		m, err := New(cfg, opts)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(m.GetRecorder("test")).NotTo(BeNil())
+	})
+
+	It("should provide a function to get the Registry", func() {
+		m, err := New(cfg, opts)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetRegistry()).NotTo(BeNil())
 	})
 })
 
