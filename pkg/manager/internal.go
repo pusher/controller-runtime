@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -93,6 +94,11 @@ func (cm *controllerManager) Add(r Runnable) error {
 		return err
 	}
 
+	// Add metrics from the object
+	if err := cm.AddMetrics(r); err != nil {
+		return err
+	}
+
 	// Add the runnable to the list
 	cm.runnables = append(cm.runnables, r)
 	if cm.started {
@@ -123,6 +129,18 @@ func (cm *controllerManager) SetFields(i interface{}) error {
 	}
 	if _, err := inject.StopChannelInto(cm.stop, i); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (cm *controllerManager) AddMetrics(i interface{}) error {
+	if ii, ok := i.(metrics.Collector); ok {
+		for _, m := range ii.GetCollectors() {
+			err := cm.metricsRegistry.Register(m)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

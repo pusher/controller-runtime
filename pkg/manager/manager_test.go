@@ -593,6 +593,36 @@ var _ = Describe("manger.Manager", func() {
 		})
 	})
 
+	It("should add metrics to the registry", func() {
+		m, err := New(cfg, opts)
+		Expect(err).NotTo(HaveOccurred())
+
+		f := func(c <-chan struct{}) error {
+			return nil
+		}
+		gm := []prometheus.Collector{
+			prometheus.NewCounter(prometheus.CounterOpts{
+				Name: "test_one",
+				Help: "test metric for testing",
+			}),
+		}
+
+		r := struct {
+			RunnableFunc
+			metrics.MetricCollector
+		}{
+			RunnableFunc:    f,
+			MetricCollector: gm,
+		}
+
+		err = m.Add(r)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Unregister will return false if the metric was never registered
+		ok := m.GetRegistry().Unregister(gm[0])
+		Expect(ok).To(BeTrue())
+	})
+
 	It("should provide a function to get the Config", func() {
 		m, err := New(cfg, opts)
 		Expect(err).NotTo(HaveOccurred())
