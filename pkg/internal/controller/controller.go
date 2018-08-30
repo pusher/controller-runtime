@@ -91,6 +91,9 @@ type Controller struct {
 	// Kubernetes API.
 	Recorder record.EventRecorder
 
+	// Metrics holds the metrics used internally by the controller
+	Metrics *Metrics
+
 	// TODO(community): Consider initializing a logger with the Controller Name as the tag
 }
 

@@ -86,7 +86,8 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 		Recorder: mgr.GetRecorder(name),
 		Queue:    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name),
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
-		Name: name,
+		Name:    name,
+		Metrics: controller.NewMetrics(),
 	}
 
 	// Add the controller as a Manager components
