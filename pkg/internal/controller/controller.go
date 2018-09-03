@@ -213,6 +213,7 @@ func (c *Controller) processNextWorkItem() bool {
 	if result, err := c.Do.Reconcile(req); err != nil {
 		c.Queue.AddRateLimited(req)
 		log.Error(err, "Reconciler error", "Controller", c.Name, "Request", req)
+		c.Metrics.ReconcileErrors.WithLabelValues(c.Name).Inc()
 
 		return false
 	} else if result.Requeue {

@@ -20,20 +20,23 @@ import "github.com/prometheus/client_golang/prometheus"
 
 // Metrics holds the prometheus metrics used internally by the controller
 type Metrics struct {
-	QueueLength *prometheus.GaugeVec
+	QueueLength     *prometheus.GaugeVec
+	ReconcileErrors *prometheus.CounterVec
 }
 
 // GetCollectors implements the metrics.Collector interface
 func (m *Metrics) GetCollectors() []prometheus.Collector {
 	return []prometheus.Collector{
 		m.QueueLength,
+		m.ReconcileErrors,
 	}
 }
 
 // NewMetrics returns a new initialised Metrics
 func NewMetrics() *Metrics {
 	return &Metrics{
-		QueueLength: newQueueLengthMetric(),
+		QueueLength:     newQueueLengthMetric(),
+		ReconcileErrors: newReconcileErrorsMetric(),
 	}
 }
 
@@ -41,5 +44,12 @@ func newQueueLengthMetric() *prometheus.GaugeVec {
 	return prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "controller_runtime_reconcile_queue_length",
 		Help: "Length of reconcile queue per controller",
+	}, []string{"controller"})
+}
+
+func newReconcileErrorsMetric() *prometheus.CounterVec {
+	return prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "controller_runtime_reconcile_errors_total",
+		Help: "Total number of reconcile errors per controller",
 	}, []string{"controller"})
 }

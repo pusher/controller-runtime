@@ -378,11 +378,14 @@ var _ = Describe("controller", func() {
 
 				By("Invoking Reconciler which will give an error")
 				Expect(<-reconciled).To(Equal(request))
-				var metric dto.Metric
+				var queueLength, reconcileErrs dto.Metric
 				Eventually(ctrl.Queue.Len, 2.0).Should(Equal(1))
-				Expect(ctrl.Metrics.QueueLength.WithLabelValues(ctrl.Name).Write(&metric)).
+				Expect(ctrl.Metrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)).
 					ShouldNot(HaveOccurred())
-				Expect(metric.GetGauge().GetValue()).To(Equal(1.0))
+				Expect(queueLength.GetGauge().GetValue()).To(Equal(1.0))
+				Expect(ctrl.Metrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)).
+					ShouldNot(HaveOccurred())
+				Expect(reconcileErrs.GetCounter().GetValue()).To(Equal(1.0))
 
 				By("Invoking Reconciler a second time without error")
 				fakeReconcile.Err = nil
@@ -391,9 +394,12 @@ var _ = Describe("controller", func() {
 				By("Removing the item from the queue")
 				Eventually(ctrl.Queue.Len).Should(Equal(0))
 				Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
-				Expect(ctrl.Metrics.QueueLength.WithLabelValues(ctrl.Name).Write(&metric)).
+				Expect(ctrl.Metrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)).
 					ShouldNot(HaveOccurred())
-				Expect(metric.GetGauge().GetValue()).To(Equal(0.0))
+				Expect(queueLength.GetGauge().GetValue()).To(Equal(0.0))
+				Expect(ctrl.Metrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)).
+					ShouldNot(HaveOccurred())
+				Expect(reconcileErrs.GetCounter().GetValue()).To(Equal(1.0))
 
 				close(done)
 			}, 2.0)
