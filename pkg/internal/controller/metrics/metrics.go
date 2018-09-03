@@ -31,9 +31,15 @@ var (
 		Name: "controller_runtime_reconcile_errors_total",
 		Help: "Total number of reconcile errors per controller",
 	}, []string{"controller"})
+
+	ReconcileTime = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "controller_runtime_reconcile_time_second",
+		Help: "Length of time per reconcile per controller",
+	}, []string{"controller"})
 )
 
 func init() {
 	metrics.Registry.MustRegister(QueueLength)
 	metrics.Registry.MustRegister(ReconcileErrors)
+	metrics.Registry.MustRegister(ReconcileTime)
 }
