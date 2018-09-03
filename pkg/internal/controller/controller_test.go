@@ -379,13 +379,20 @@ var _ = Describe("controller", func() {
 				By("Invoking Reconciler which will give an error")
 				Expect(<-reconciled).To(Equal(request))
 				var queueLength, reconcileErrs dto.Metric
-				Eventually(ctrl.Queue.Len, 2.0).Should(Equal(1))
-				Expect(ctrl.Metrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)).
-					ShouldNot(HaveOccurred())
-				Expect(queueLength.GetGauge().GetValue()).To(Equal(1.0))
-				Expect(ctrl.Metrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)).
-					ShouldNot(HaveOccurred())
-				Expect(reconcileErrs.GetCounter().GetValue()).To(Equal(1.0))
+				Eventually(func() error {
+					ctrl.Metrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)
+					if queueLength.GetGauge().GetValue() != 1.0 {
+						return fmt.Errorf("metrics not updated")
+					}
+					return nil
+				}, 2.0).Should(Succeed())
+				Eventually(func() error {
+					ctrl.Metrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)
+					if reconcileErrs.GetCounter().GetValue() != 1.0 {
+						return fmt.Errorf("metrics not updated")
+					}
+					return nil
+				}, 2.0).Should(Succeed())
 
 				By("Invoking Reconciler a second time without error")
 				fakeReconcile.Err = nil
@@ -394,12 +401,6 @@ var _ = Describe("controller", func() {
 				By("Removing the item from the queue")
 				Eventually(ctrl.Queue.Len).Should(Equal(0))
 				Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
-				Expect(ctrl.Metrics.QueueLength.WithLabelValues(ctrl.Name).Write(&queueLength)).
-					ShouldNot(HaveOccurred())
-				Expect(queueLength.GetGauge().GetValue()).To(Equal(0.0))
-				Expect(ctrl.Metrics.ReconcileErrors.WithLabelValues(ctrl.Name).Write(&reconcileErrs)).
-					ShouldNot(HaveOccurred())
-				Expect(reconcileErrs.GetCounter().GetValue()).To(Equal(1.0))
 
 				close(done)
 			}, 2.0)
@@ -419,9 +420,13 @@ var _ = Describe("controller", func() {
 				Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
 
 				var reconcileTime dto.Metric
-				Expect(ctrl.Metrics.ReconcileTime.WithLabelValues(ctrl.Name).Write(&reconcileTime)).
-					ShouldNot(HaveOccurred())
-				Expect(reconcileTime.GetHistogram().GetSampleCount()).To(Equal(uint64(1)))
+				Eventually(func() error {
+					ctrl.Metrics.ReconcileTime.WithLabelValues(ctrl.Name).Write(&reconcileTime)
+					if reconcileTime.GetHistogram().GetSampleCount() != uint64(1) {
+						return fmt.Errorf("metrics not updated")
+					}
+					return nil
+				}, 2.0).Should(Succeed())
 
 				close(done)
 			})
