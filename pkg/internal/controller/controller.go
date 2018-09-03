@@ -174,6 +174,9 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 func (c *Controller) processNextWorkItem() bool {
 	// This code copy-pasted from the sample-Controller.
 
+	// Update metrics after processing each item
+	defer c.updateMetrics()
+
 	obj, shutdown := c.Queue.Get()
 	if obj == nil {
 		// Sometimes the Queue gives us nil items when it starts up
@@ -232,4 +235,9 @@ func (c *Controller) processNextWorkItem() bool {
 func (c *Controller) InjectFunc(f inject.Func) error {
 	c.SetFields = f
 	return nil
+}
+
+// updateMetrics updates prometheus metrics within the controller
+func (c *Controller) updateMetrics() {
+	c.Metrics.QueueLength.WithLabelValues(c.Name).Set(float64(c.Queue.Len()))
 }
