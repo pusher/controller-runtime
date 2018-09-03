@@ -403,6 +403,28 @@ var _ = Describe("controller", func() {
 
 				close(done)
 			}, 2.0)
+
+			It("should add a reconcile time to the reconcile time histogram", func(done Done) {
+				go func() {
+					defer GinkgoRecover()
+					Expect(ctrl.Start(stop)).NotTo(HaveOccurred())
+				}()
+				ctrl.Queue.Add(request)
+
+				By("Invoking Reconciler")
+				Expect(<-reconciled).To(Equal(request))
+
+				By("Removing the item from the queue")
+				Eventually(ctrl.Queue.Len).Should(Equal(0))
+				Eventually(func() int { return ctrl.Queue.NumRequeues(request) }).Should(Equal(0))
+
+				var reconcileTime dto.Metric
+				Expect(ctrl.Metrics.ReconcileTime.WithLabelValues(ctrl.Name).Write(&reconcileTime)).
+					ShouldNot(HaveOccurred())
+				Expect(reconcileTime.GetHistogram().GetSampleCount()).To(Equal(uint64(1)))
+
+				close(done)
+			})
 		})
 	})
 })
