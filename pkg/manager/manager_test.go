@@ -164,6 +164,37 @@ var _ = Describe("manger.Manager", func() {
 				close(done)
 			})
 
+			It("should stop the internal when stop is called", func(done Done) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				s := make(chan struct{})
+				close(s)
+				Expect(m.Start(s)).NotTo(HaveOccurred())
+
+				mgr, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				Expect(mgr.stop).To(BeClosed())
+				close(done)
+			})
+
+			It("should not overwrite the internal stop channel", func(done Done) {
+				m, err := New(cfg, options)
+				Expect(err).NotTo(HaveOccurred())
+				s := make(chan struct{})
+
+				go func() {
+					defer GinkgoRecover()
+					Expect(m.Start(s)).NotTo(HaveOccurred())
+					close(done)
+				}()
+
+				mgr, ok := m.(*controllerManager)
+				Expect(ok).To(BeTrue())
+				Expect(mgr.stop).ToNot(Equal(stop))
+
+				close(s)
+			})
+
 			It("should return an error if it can't start the cache", func(done Done) {
 				m, err := New(cfg, options)
 				Expect(err).NotTo(HaveOccurred())
@@ -327,8 +358,7 @@ var _ = Describe("manger.Manager", func() {
 				},
 				stop: func(stop <-chan struct{}) error {
 					defer GinkgoRecover()
-					// Manager stop chan has not been initialized.
-					Expect(stop).To(BeNil())
+					Expect(stop).ToNot(BeNil())
 					return nil
 				},
 				f: func(f inject.Func) error {

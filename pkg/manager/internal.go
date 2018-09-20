@@ -73,7 +73,7 @@ type controllerManager struct {
 	mu      sync.Mutex
 	started bool
 	errChan chan error
-	stop    <-chan struct{}
+	stop    chan struct{}
 
 	startCache func(stop <-chan struct{}) error
 }
@@ -162,7 +162,8 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 		go cm.start(stop)
 		select {
 		case <-stop:
-			// we are done
+			// We are done, close the internal stop channel
+			close(cm.stop)
 			return nil
 		case err := <-cm.errChan:
 			// Error starting a controller
@@ -195,7 +196,8 @@ func (cm *controllerManager) Start(stop <-chan struct{}) error {
 
 	select {
 	case <-stop:
-		// We are done
+		// We are done, close the internal stop channel
+		close(cm.stop)
 		return nil
 	case err := <-cm.errChan:
 		// Error starting a controller
@@ -207,8 +209,6 @@ func (cm *controllerManager) start(stop <-chan struct{}) {
 	func() {
 		cm.mu.Lock()
 		defer cm.mu.Unlock()
-
-		cm.stop = stop
 
 		// Start the Cache. Allow the function to start the cache to be mocked out for testing
 		if cm.startCache == nil {
